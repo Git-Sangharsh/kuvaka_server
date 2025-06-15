@@ -46,11 +46,10 @@ wss.on("connection", async (ws) => {
     try {
       const parsed = JSON.parse(data);
 
-      // User sends username initially
       if (parsed.type === "init") {
         ws.username = parsed.username;
 
-        // Send last 50 messages
+        // Send last 50 messages to the new user
         const messages = await Message.find().sort({ timestamp: -1 }).limit(50);
         ws.send(
           JSON.stringify({
@@ -58,9 +57,22 @@ wss.on("connection", async (ws) => {
             messages: messages.reverse(),
           })
         );
+
+        // Broadcast: [username] joined the chat
+        const joinMessage = {
+          type: "system",
+          message: `${ws.username} joined the chat`,
+          timestamp: new Date().toISOString(),
+        };
+
+        for (let client of clients) {
+          if (client.readyState === ws.OPEN) {
+            client.send(JSON.stringify(joinMessage));
+          }
+        }
       }
 
-      // User sends new chat message
+      // User sends new message
       else if (parsed.type === "message") {
         const newMsg = await Message.create({
           username: ws.username,
@@ -72,7 +84,6 @@ wss.on("connection", async (ws) => {
           message: newMsg,
         });
 
-        // Broadcast to all clients
         for (let client of clients) {
           if (client.readyState === ws.OPEN) {
             client.send(payload);
@@ -86,6 +97,21 @@ wss.on("connection", async (ws) => {
 
   ws.on("close", () => {
     clients.delete(ws);
+
+    // Broadcast: [username] left the chat
+    if (ws.username) {
+      const leaveMessage = {
+        type: "system",
+        message: `${ws.username} left the chat`,
+        timestamp: new Date().toISOString(),
+      };
+
+      for (let client of clients) {
+        if (client.readyState === ws.OPEN) {
+          client.send(JSON.stringify(leaveMessage));
+        }
+      }
+    }
   });
 });
 
