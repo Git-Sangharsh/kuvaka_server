@@ -72,6 +72,21 @@ wss.on("connection", async (ws) => {
         }
       }
 
+      // typing event
+      else if (parsed.type === "typing") {
+        const typingPayload = JSON.stringify({
+          type: "typing",
+          username: ws.username,
+        });
+
+        for (let client of clients) {
+          if (client !== ws && client.readyState === ws.OPEN) {
+            client.send(typingPayload);
+          }
+        }
+      }
+
+
       // User sends new message
       else if (parsed.type === "message") {
         const newMsg = await Message.create({
